@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>おうち探し</title>
+<meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1b" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="おうち探し">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<!-- おうち探し（2026-11-15 作り直し、2026-11-16 GitHub Pages へ。データと★は GAS から）。見た目は Margin（秘書アプリ）にそろえた：生成りの背景・白いカード・紺の差し色・下に浮かぶタブ -->
+<style>
+  :root {
+    --bg: #f5f5f2; --card: #ffffff; --line: #e4e3de; --soft: #efeee9;
+    --text: #111110; --sub: #55544f; --muted: #7c7b74;
+    --accent: #26406e; --accent-soft: #e7ecf5;
+    --home: #7a4b17; --home-soft: #f6ede2;
+    --good: #1e6b35; --good-soft: #e5f2e8; --warn: #8a5a00; --warn-soft: #fbf1dc; --bad: #b3261e; --bad-soft: #fbeceb;
+    --star: #c98a00; --photo: #e6e3da;
+    --bar: rgba(250,250,248,.96);
+  }
+  /* 画面の色：自動（iPhone の設定に合わせる）／ライト／ダーク。html の data-theme で選ぶ（2026-11-15） */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121211; --card: #1c1c1b; --line: #2f2f2c; --soft: #252523;
+      --text: #f0efec; --sub: #c3c2b8; --muted: #95948c;
+      --accent: #9db6e6; --accent-soft: #23304a;
+      --home: #e5b882; --home-soft: #3a2c1c;
+      --good: #7fd396; --good-soft: #1d3327; --warn: #e3b341; --warn-soft: #3a3218; --bad: #f08a84; --bad-soft: #3b1f1d;
+      --star: #f2c14e; --photo: #2a2a27;
+      --bar: rgba(28,28,27,.96);
+    }
+  }
+  :root[data-theme="dark"] {
+      --bg: #121211; --card: #1c1c1b; --line: #2f2f2c; --soft: #252523;
+      --text: #f0efec; --sub: #c3c2b8; --muted: #95948c;
+      --accent: #9db6e6; --accent-soft: #23304a;
+      --home: #e5b882; --home-soft: #3a2c1c;
+      --good: #7fd396; --good-soft: #1d3327; --warn: #e3b341; --warn-soft: #3a3218; --bad: #f08a84; --bad-soft: #3b1f1d;
+      --star: #f2c14e; --photo: #2a2a27;
+      --bar: rgba(28,28,27,.96);
+    }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+  button, a, select { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  select { font-size: 16px !important; } /* iPhone は 16px 未満の入力欄を押すと拡大する */
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  button, select { font: inherit; color: inherit; }
+  header {
+    position: sticky; top: 0; z-index: 10; background: var(--bar);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line);
+    padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+  }
+  .hrow { display: flex; align-items: center; gap: 8px; max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0; font-weight: 700; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  .logo { width: 28px; height: 28px; border-radius: 8px; background: var(--home-soft); color: var(--home); display: grid; place-items: center; flex: none; }
+  .logo svg { width: 17px; height: 17px; }
+  .pill {
+    border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px;
+    font-size: 13px; color: var(--sub); min-height: 32px; white-space: nowrap;
+  }
+  .sortwrap { position: relative; }
+  .sortwrap select { position: absolute; inset: 0; opacity: 0; width: 100%; }
+  .who { font-weight: 600; color: var(--home); background: var(--home-soft); border-color: transparent; }
+  .chips { display: flex; gap: 6px; overflow-x: auto; margin: 10px auto 0; max-width: 640px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--sub); min-height: 32px; }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--card); font-weight: 600; }
+  main { max-width: 640px; margin: 0 auto; padding: 12px 16px; }
+  .basecard { background: var(--home-soft); color: var(--home); border-radius: 14px; padding: 10px 14px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
+  .basecard svg { flex: none; width: 20px; height: 20px; }
+  .basecard b { font-size: 14px; display: block; }
+  .count { font-size: 12px; color: var(--muted); margin: 14px 4px 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; margin-bottom: 14px; }
+  .card.no { opacity: .6; }
+  .photo { position: relative; height: 170px; background: var(--photo); display: grid; place-items: center; color: var(--muted); }
+  .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .photo .ph { width: 40px; height: 40px; opacity: .45; }
+  .rank { position: absolute; left: 10px; top: 10px; border-radius: 999px; padding: 3px 10px; font-size: 13px; font-weight: 700; background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .rank.r1 { color: var(--good); } .rank.r2 { color: var(--accent); } .rank.r3 { color: var(--muted); }
+  .flags { position: absolute; right: 10px; top: 10px; display: flex; gap: 6px; }
+  .flag { border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; color: #fff; background: var(--star); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+  .flag.both { background: var(--bad); }
+  .flag.new { background: var(--accent); }
+  .body { padding: 12px 14px 14px; }
+  .price { font-size: 24px; font-weight: 700; letter-spacing: .01em; line-height: 1.3; }
+  .price small { font-size: 13px; font-weight: 400; color: var(--sub); margin-left: 4px; }
+  .name { font-weight: 600; font-size: 15px; margin-top: 2px; overflow-wrap: anywhere; }
+  .facts { font-size: 13px; color: var(--sub); overflow-wrap: anywhere; }
+  .pts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .pt { font-size: 13px; border-radius: 8px; padding: 3px 9px; }
+  .pt.g { background: var(--good-soft); color: var(--good); }
+  .pt.w { background: var(--warn-soft); color: var(--warn); }
+  details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+  summary { color: var(--accent); font-size: 13px; cursor: pointer; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  details[open] summary { margin-bottom: 8px; }
+  .rows { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; font-size: 14px; align-items: baseline; }
+  .rows .k { color: var(--sub); font-size: 12px; white-space: nowrap; }
+  .rows .v { min-width: 0; overflow-wrap: anywhere; }
+  .rows .d { font-size: 12px; font-weight: 600; text-align: right; white-space: nowrap; }
+  .d.good { color: var(--good); } .d.bad { color: var(--bad); } .d.mid { color: var(--sub); font-weight: 400; }
+  .parts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+  .part { font-size: 11px; border-radius: 4px; padding: 1px 6px; }
+  .part.good { background: var(--good-soft); color: var(--good); } .part.bad { background: var(--bad-soft); color: var(--bad); }
+  .note { font-size: 12px; color: var(--sub); margin: 8px 0 0; overflow-wrap: anywhere; }
+  .plan { display: block; max-width: 160px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  .acts { display: flex; gap: 8px; margin-top: 12px; }
+  .acts button, .acts a {
+    flex: 1; display: flex; align-items: center; justify-content: center; text-decoration: none; white-space: nowrap;
+    border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 12px; min-height: 44px; padding: 0 6px; font-size: 15px;
+  }
+  .acts .like { flex: 1.3; }
+  .acts .like[aria-pressed="true"] { background: var(--star); border-color: var(--star); color: #fff; font-weight: 700; }
+  .acts .nope[aria-pressed="true"] { background: var(--soft); font-weight: 700; }
+  .acts .sm { flex: .55; font-size: 13px; color: var(--sub); }
+  .empty { text-align: center; color: var(--sub); padding: 40px 0; }
+  .more { display: block; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); }
+  nav {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 20;
+    display: flex; gap: 2px; padding: 4px; border-radius: 18px; background: var(--bar);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+    border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0,0,0,.12); width: min(440px, calc(100% - 24px));
+  }
+  nav button {
+    flex: 1; min-width: 0; border: 0; background: transparent; border-radius: 14px; padding: 6px 2px; font-size: 11px; color: var(--sub);
+    display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 48px; position: relative; white-space: nowrap;
+  }
+  nav button svg { width: 22px; height: 22px; }
+  nav button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  nav .n { position: absolute; top: 2px; right: calc(50% - 26px); background: var(--star); color: #fff; border-radius: 999px; font-size: 10px; padding: 0 5px; font-weight: 700; line-height: 16px; }
+  .sheet { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.35); display: none; align-items: flex-end; justify-content: center; }
+  .sheet.show { display: flex; }
+  .sheet .box { background: var(--card); width: min(480px, 100%); border-radius: 20px 20px 0 0; padding: 22px 18px calc(22px + env(safe-area-inset-bottom)); text-align: center; }
+  .sheet h2 { font-size: 18px; margin: 0 0 4px; }
+  .sheet p { font-size: 13px; color: var(--sub); margin: 0 0 16px; }
+  .sheet .two { display: flex; gap: 10px; }
+  .sheet .two button { flex: 1; min-height: 56px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--sub); font-size: 17px; }
+  .sheet .two button[aria-pressed="true"] { background: var(--home-soft); color: var(--home); border-color: var(--home); font-weight: 700; }
+  .sheet h3 { font-size: 13px; color: var(--sub); font-weight: 600; margin: 18px 0 8px; text-align: left; }
+  .sheet .three button { min-height: 44px; font-size: 15px; }
+  .sheet .close { margin-top: 18px; width: 100%; min-height: 48px; border-radius: 14px; border: 0; background: var(--accent); color: var(--card); font-size: 16px; font-weight: 600; }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 25;
+    background: var(--text); color: var(--bg); font-size: 13px; padding: 8px 14px; border-radius: 999px; opacity: 0; transition: opacity .2s; pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+  .notice { text-align: center; color: var(--sub); padding: 48px 16px; font-size: 15px; }
+  .notice b { display: block; color: var(--text); font-size: 17px; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <h1><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></span>おうち探し</h1>
+    <span class="sortwrap"><span class="pill" id="sortLabel">おすすめ順 ▾</span>
+      <select id="sort" aria-label="並び替え">
+        <option value="score">おすすめ順</option>
+        <option value="new">新しく入った順</option>
+        <option value="monthly">安い順</option>
+        <option value="wife" id="optWife">通勤が短い順</option>
+        <option value="me" id="optMe">通勤が短い順</option>
+        <option value="age">築年数が新しい順</option>
+        <option value="area">広い順</option>
+      </select></span>
+    <button class="pill who" id="whoBtn" aria-label="見ている人・画面の色"></button>
+  </div>
+  <div class="chips" id="cities"></div>
+</header>
+<main>
+  <div class="basecard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9H3z"/></svg>
+    <div><b>今の家とくらべています</b><span id="basis"></span></div></div>
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+</main>
+<nav id="tabs">
+  <button data-v="all" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9H3z"/></svg>おすすめ</button>
+  <button data-v="like"><span class="n" id="nLike" hidden></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></svg>気になる</button>
+  <button data-v="new"><span class="n" id="nNew" hidden></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>まだ見てない</button>
+  <button data-v="no"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>見送り</button>
+</nav>
+<div class="sheet" id="whoSheet"><div class="box">
+  <h2>どちらが見ていますか？</h2>
+  <p>★ や「見送る」を、ふたり別々に残します。この iPhone に覚えておきます。</p>
+  <div class="two" id="whoBtns"><button data-who="me"></button><button data-who="wife"></button></div>
+  <h3>画面の色</h3>
+  <div class="two three" id="themeBtns"><button data-theme="auto">自動</button><button data-theme="light">ライト</button><button data-theme="dark">ダーク</button></div>
+  <button class="close" id="sheetClose">とじる</button>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== データの読み込み（GAS）=====
+// GAS の URL はコードに書かない。共有の URL の最後の「#k=…」で受け取り、この端末に覚える
+(function takeKey() {
+  const m = location.hash.match(/[#&]k=([A-Za-z0-9_-]{20,})/);
+  if (m) {
+    try { localStorage.setItem('gasKey', m[1]); } catch (e) {}
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+})();
+const KEY = (() => { try { return localStorage.getItem('gasKey') || ''; } catch (e) { return ''; } })();
+const API = KEY ? 'https://script.google.com/macros/s/' + KEY + '/exec' : '';
+let DATA = null, B = null, WORK = { me: '', wife: '' };
+const PAGE = 20;
+let NAME = { me: '', wife: '' };
+const RECENT_DAYS = 2; // 取り込んでからこの日数までは「新着」
+let tab = 'all', sort = 'score', city = '', shown = PAGE, who = '';
+
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = text;
+  return e;
+}
+function svg(html) { const s = el('span'); s.innerHTML = html; return s.firstChild; } // 決まった絵だけ（データは入れない）
+const PH = '<svg class="ph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9H3z"/><path d="M9 20v-6h6v6"/></svg>';
+const yen = (n) => (n === '' || n === null || n === undefined) ? '—' : '¥' + Number(n).toLocaleString('ja-JP');
+const blank = (v) => v === '' || v === null || v === undefined;
+const store = { get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+
+// 印：見ている人の印と、相手の印
+const other = () => who === 'wife' ? 'me' : 'wife';
+const markOf = (it, w) => w === 'wife' ? it.markWife : it.markMe;
+function isNew(it) {
+  if (!it.added) return false;
+  const d = (Date.now() - new Date(it.added + 'T00:00:00+09:00').getTime()) / 86400000;
+  return d < RECENT_DAYS;
+}
+
+function cityOf(addr) {
+  const a = String(addr || '').replace(/^(東京都|北海道|(?:京都|大阪)府|.{2,3}県)/, '');
+  const m = a.match(/^(.+?郡.+?[町村]|.+?市(?:[^市町村]{1,4}?区)?|.+?区|.+?[町村])/);
+  return m ? m[1] : 'その他';
+}
+
+function buildCities() {
+  const n = {};
+  DATA.items.forEach((it) => { n[it.city] = (n[it.city] || 0) + 1; });
+  const saved = store.get('city');
+  if (saved && n[saved]) city = saved;
+  const box = $('cities');
+  box.textContent = '';
+  const add = (v, label) => {
+    const b = el('button', 'chip', label);
+    b.setAttribute('aria-pressed', v === city);
+    b.onclick = () => { city = v; shown = PAGE; store.set('city', v); buildCities(); render(); };
+    box.appendChild(b);
+  };
+  add('', 'すべての地域');
+  Object.keys(n).sort((a, b) => n[b] - n[a] || a.localeCompare(b, 'ja'))
+    .forEach((c) => add(c, c.replace(/^福岡市/, '') + ' ' + n[c]));
+}
+
+function visible() {
+  const xs = DATA.items.filter((it) => {
+    if (city && it.city !== city) return false;
+    const mine = markOf(it, who);
+    if (tab === 'all') return mine !== 'no';
+    if (tab === 'like') return it.markMe === 'like' || it.markWife === 'like';
+    if (tab === 'new') return !mine;
+    return mine === 'no';
+  });
+  const num = (v, dflt) => blank(v) ? dflt : Number(v);
+  const both = (it) => (it.markMe === 'like') + (it.markWife === 'like');
+  const by = {
+    score: (a, b) => num(b.score, -99) - num(a.score, -99),
+    new: (a, b) => String(b.added).localeCompare(String(a.added)) || num(b.score, -99) - num(a.score, -99),
+    monthly: (a, b) => num(a.monthly, 1e9) - num(b.monthly, 1e9),
+    wife: (a, b) => num(a.wife, 999) - num(b.wife, 999),
+    me: (a, b) => num(a.me, 999) - num(b.me, 999),
+    age: (a, b) => num(a.age, 99) - num(b.age, 99),
+    area: (a, b) => num(b.area, 0) - num(a.area, 0),
+  }[sort];
+  // 「気になる」では、ふたりとも★ を先に
+  return xs.sort(tab === 'like' ? (a, b) => both(b) - both(a) || by(a, b) : by);
+}
+
+function render() {
+  const xs = visible();
+  const likes = DATA.items.filter((it) => it.markMe === 'like' || it.markWife === 'like').length;
+  const unseen = DATA.items.filter((it) => !markOf(it, who)).length;
+  $('nLike').textContent = likes; $('nLike').hidden = !likes;
+  $('nNew').textContent = unseen; $('nNew').hidden = !unseen;
+  const c = DATA.counts;
+  const label = { all: 'おすすめ', like: '気になる', new: 'まだ見てない', no: '見送り' }[tab];
+  $('count').textContent = (city ? city + '・' : '') + label + ' ' + xs.length + '件'
+    + '（ぜんぶで ' + c.measured + '件。点数を付ける前 ' + c.pending + '件・条件外 ' + c.excluded + '件）';
+  const list = $('list');
+  list.textContent = '';
+  if (!xs.length) {
+    list.appendChild(el('div', 'empty',
+      tab === 'like' ? 'まだ ★ を付けた物件はありません' : tab === 'new' ? 'ぜんぶ見ました' : tab === 'no' ? '見送った物件はありません' : '該当する物件はありません'));
+    return;
+  }
+  xs.slice(0, shown).forEach((it) => list.appendChild(card(it)));
+  if (xs.length > shown) {
+    const more = el('button', 'more', 'もっと見る（あと ' + (xs.length - shown) + '件）');
+    more.onclick = () => { shown += PAGE; render(); };
+    list.appendChild(more);
+  }
+}
+
+// 良いところ・気になるところを、ふだんの言葉で
+function points(it) {
+  const g = [], w = [];
+  const cmp = (label, v, base) => {
+    if (blank(v)) return;
+    const d = Number(v) - base;
+    if (d <= -3) g.push(label + ' ' + (-d) + '分短い');
+    else if (d >= 3) w.push(label + ' ' + d + '分長い');
+  };
+  cmp(NAME.wife + 'の通勤', it.wife, B.wifeCommute);
+  cmp(NAME.me + 'の通勤', it.me, B.myCommute);
+  if (!blank(it.stWalk)) {
+    if (Number(it.stWalk) <= 7) g.push((it.station ? String(it.station).replace(/駅$/, '') + '駅' : '駅') + ' 徒歩' + it.stWalk + '分');
+    else if (Number(it.stWalk) >= 13) w.push('駅 徒歩' + it.stWalk + '分');
+  }
+  if (blank(it.superWalk)) w.push('近くにスーパーなし');
+  else if (Number(it.superWalk) <= 5) g.push('スーパー 徒歩' + it.superWalk + '分');
+  else if (Number(it.superWalk) > 10) w.push('スーパー 徒歩' + it.superWalk + '分');
+  if (!blank(it.convWalk) && Number(it.convWalk) <= 3) g.push('コンビニ すぐ');
+  if (!blank(it.area)) {
+    if (Number(it.area) >= 60) g.push('広い（' + it.area + '㎡）');
+    else if (Number(it.area) < 45) w.push('少しせまい（' + it.area + '㎡）');
+  }
+  if (!blank(it.monthly)) {
+    const d = B.monthly - Number(it.monthly);
+    if (d >= 3000) g.push('今より月 ' + yen(d) + ' 安い');
+    else if (d <= -10000) w.push('今より月 ' + yen(-d) + ' 高い');
+  }
+  if (it.age === 0 || (!blank(it.age) && Number(it.age) <= 5)) g.push(it.age === 0 ? '新築' : '築浅（築' + it.age + '年）');
+  return { g, w };
+}
+
+function diffMin(v, base) {
+  if (blank(v)) return { text: '測れず', cls: 'bad' };
+  const d = Number(v) - base;
+  if (d === 0) return { text: '今と同じ', cls: 'mid' };
+  return { text: (d > 0 ? '+' : '−') + Math.abs(d) + '分', cls: d < 0 ? 'good' : 'bad' };
+}
+function walkCell(v) {
+  if (blank(v)) return { text: '近くになし', cls: 'bad' };
+  const n = Number(v);
+  return { text: n <= 5 ? '近い' : n <= 10 ? 'やや遠い' : '遠い', cls: n <= 5 ? 'good' : n <= 10 ? 'mid' : 'bad' };
+}
+
+function card(it) {
+  const mine = markOf(it, who);
+  const c = el('article', 'card' + (mine === 'no' ? ' no' : ''));
+
+  // 写真（SUUMO の建物の写真。見る人の iPhone が SUUMO から読む）
+  const ph = el('div', 'photo');
+  ph.appendChild(svg(PH));
+  if (it.photo && /^https:\/\/img\d*\.suumo\.com\//.test(it.photo)) {
+    const img = el('img');
+    img.loading = 'lazy'; img.alt = ''; img.referrerPolicy = 'no-referrer';
+    img.onerror = () => img.remove();
+    img.src = it.photo;
+    ph.appendChild(img);
+  }
+  const sc = Number(it.score);
+  const r = sc >= 3 ? ['r1', '◎ おすすめ'] : sc >= 0 ? ['r2', '○ まあまあ'] : ['r3', '△ いまいち'];
+  ph.appendChild(el('span', 'rank ' + r[0], r[1]));
+  const flags = el('div', 'flags');
+  if (isNew(it)) flags.appendChild(el('span', 'flag new', '新着'));
+  if (it.markMe === 'like' && it.markWife === 'like') flags.appendChild(el('span', 'flag both', '★ ふたりとも'));
+  else if (markOf(it, other()) === 'like') flags.appendChild(el('span', 'flag', '★ ' + NAME[other()]));
+  ph.appendChild(flags);
+  c.appendChild(ph);
+
+  const body = el('div', 'body');
+  const price = el('div', 'price', yen(it.rentFee));
+  price.appendChild(el('small', null, '/月（管理費込み・駐車場は別）'));
+  body.appendChild(price);
+  body.appendChild(el('div', 'name', it.name));
+  const facts = [it.layout, blank(it.area) ? '' : it.area + '㎡', it.age === 0 ? '新築' : blank(it.age) ? '' : '築' + it.age + '年', it.floor]
+    .filter((x) => x).join('・');
+  body.appendChild(el('div', 'facts', facts + '｜' + String(it.addr).replace(/^福岡県/, '')));
+
+  const p = points(it);
+  const pts = el('div', 'pts');
+  p.g.forEach((x) => pts.appendChild(el('span', 'pt g', '👍 ' + x)));
+  p.w.forEach((x) => pts.appendChild(el('span', 'pt w', x)));
+  if (it.check) pts.appendChild(el('span', 'pt w', it.check));
+  body.appendChild(pts);
+
+  // くわしく：表・点数の内訳・お金・間取り図
+  const det = el('details');
+  det.appendChild(el('summary', null, 'くわしく見る（通勤・お店・お金・間取り図）'));
+  const rows = el('div', 'rows');
+  const row = (k, v, d) => {
+    rows.appendChild(el('div', 'k', k));
+    rows.appendChild(el('div', 'v', v));
+    rows.appendChild(el('div', 'd ' + (d ? d.cls : ''), d ? d.text : ''));
+  };
+  row(NAME.wife + 'の通勤', blank(it.wife) ? '—' : WORK.wife + 'まで ' + it.wife + '分', diffMin(it.wife, B.wifeCommute));
+  row(NAME.me + 'の通勤', blank(it.me) ? '—' : WORK.me + 'まで ' + it.me + '分', diffMin(it.me, B.myCommute));
+  row('駅', it.station ? it.station + ' 徒歩' + it.stWalk + '分' : '—', diffMin(it.stWalk, B.stationWalk));
+  row('スーパー', blank(it.superWalk) ? 'なし' : '徒歩' + it.superWalk + '分（' + it.superName + '）', walkCell(it.superWalk));
+  row('コンビニ', blank(it.convWalk) ? 'なし' : '徒歩' + it.convWalk + '分' + (it.convName ? '（' + it.convName + '）' : ''), walkCell(it.convWalk));
+  row('ランドリー', blank(it.laundryWalk) ? 'なし' : '徒歩' + it.laundryWalk + '分', walkCell(it.laundryWalk));
+  if (!blank(it.mcdWalk)) row('マクドナルド', '徒歩' + it.mcdWalk + '分', null);
+  if (it.mall) row('モール', blank(it.mallMin) ? it.mall + '（測れず）' : '車' + it.mallMin + '分・' + it.mallKm + 'km（' + it.mall + '）', null);
+  det.appendChild(rows);
+  if (it.parts) {
+    const ps = el('div', 'parts');
+    String(it.parts).split(' ').filter((x) => x).forEach((x) => ps.appendChild(el('span', 'part ' + (x.indexOf('+') >= 0 ? 'good' : 'bad'), x)));
+    det.appendChild(ps);
+  }
+  det.appendChild(el('p', 'note', '点数 ' + (sc > 0 ? '+' : '') + sc + '点。賃料 ' + yen(it.rent) + '／管理費 ' + yen(it.fee) + '／敷金 ' + it.deposit + '／礼金 ' + it.keyMoney
+    + (it.type ? '／' + it.type : '') + (it.stories ? '／' + it.stories : '')));
+  det.appendChild(el('p', 'note', '交通：' + it.access));
+  if (it.plan && /^https:\/\/img\d*\.suumo\.com\//.test(it.plan)) {
+    det.addEventListener('toggle', () => {
+      if (!det.open || det.querySelector('.plan')) return;
+      const im = el('img', 'plan');
+      im.alt = '間取り図'; im.referrerPolicy = 'no-referrer';
+      im.onerror = () => im.remove();
+      im.src = it.plan;
+      det.appendChild(im);
+    });
+  }
+  body.appendChild(det);
+
+  const acts = el('div', 'acts');
+  const like = el('button', 'like', '★ 気になる');
+  like.setAttribute('aria-pressed', mine === 'like');
+  like.onclick = () => mark(it, mine === 'like' ? '' : 'like');
+  const nope = el('button', 'nope', '見送る');
+  nope.setAttribute('aria-pressed', mine === 'no');
+  nope.onclick = () => mark(it, mine === 'no' ? '' : 'no');
+  const suumo = el('a', 'sm', 'SUUMO');
+  // 物件ページが分かっていればそこへ。分からない（手で貼って取り込んだ）物件は、SUUMO の中を建物名で探して
+  // いちばん上に出たページへ直接飛ぶ（DuckDuckGo の「\」検索。建物のページになることが多い）
+  suumo.href = /^https:\/\/suumo\.jp\//.test(it.url) ? it.url
+    : 'https://duckduckgo.com/?q=' + encodeURIComponent('\\ site:suumo.jp/chintai ' + it.name + ' ' + String(it.addr).replace(/^福岡県/, ''));
+  suumo.target = '_blank'; suumo.rel = 'noopener';
+  const map = el('a', 'sm', '地図');
+  map.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(it.addr);
+  map.target = '_blank'; map.rel = 'noopener';
+  [like, nope, suumo, map].forEach((x) => acts.appendChild(x));
+  body.appendChild(acts);
+  c.appendChild(body);
+  return c;
+}
+
+function mark(it, v) {
+  const k = who === 'wife' ? 'markWife' : 'markMe';
+  const prev = it[k];
+  it[k] = v;
+  render();
+  // text/plain で送る（CORS の事前確認を避ける）。GAS は JSON で返す
+  fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'mark', key: it.k, mark: v, who: who }) })
+    .then((r) => r.json())
+    .then((res) => {
+      if (!res.ok) throw new Error(res.error || '不明なエラー');
+      saveCache();
+      toast(v === 'like' ? '★ 気になる に入れました' : v === 'no' ? '見送りにしました' : '印を外しました');
+    })
+    .catch((e) => { it[k] = prev; render(); toast('保存できませんでした：' + e.message); });
+}
+
+let tt;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function setWho(w) {
+  who = w; store.set('who', w);
+  $('whoBtn').textContent = NAME[w] + ' ▾';
+  [...$('whoBtns').children].forEach((x) => x.setAttribute('aria-pressed', x.dataset.who === w));
+  render();
+}
+function setTheme(t) {
+  if (t !== 'light' && t !== 'dark') t = 'auto';
+  store.set('theme', t);
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  // いちばん上（時計のところ）の色を、選んだ色に合わせる
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+    if (!m.dataset.media) m.dataset.media = m.getAttribute('media') || '';
+    if (t === 'auto') m.setAttribute('media', m.dataset.media);
+    else m.setAttribute('media', (m.dataset.media.indexOf(t) >= 0) ? 'all' : 'not all');
+  });
+  [...$('themeBtns').children].forEach((x) => x.setAttribute('aria-pressed', x.dataset.theme === t));
+}
+const closeSheet = () => { if (who) $('whoSheet').classList.remove('show'); };
+$('whoBtns').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const first = !store.get('who');
+  setWho(b.dataset.who);
+  if (first) closeSheet(); // 最初の1回は、選んだらすぐ閉じる
+});
+$('themeBtns').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.theme); });
+$('sheetClose').onclick = closeSheet;
+$('whoSheet').addEventListener('click', (e) => { if (e.target === $('whoSheet')) closeSheet(); });
+$('whoBtn').onclick = () => $('whoSheet').classList.add('show');
+
+$('tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  tab = b.dataset.v; shown = PAGE;
+  [...$('tabs').children].forEach((x) => x.setAttribute('aria-selected', x === b));
+  window.scrollTo(0, 0);
+  render();
+});
+$('sort').addEventListener('change', (e) => {
+  sort = e.target.value; shown = PAGE; store.set('sort', sort);
+  $('sortLabel').textContent = e.target.selectedOptions[0].textContent + ' ▾';
+  render();
+});
+
+const savedSort = store.get('sort');
+if (savedSort && $('sort').querySelector('option[value="' + savedSort + '"]')) {
+  sort = savedSort; $('sort').value = sort;
+}
+setTheme(store.get('theme'));
+
+function notice(title, text) {
+  const list = $('list');
+  list.textContent = '';
+  const n = el('div', 'notice');
+  n.appendChild(el('b', null, title));
+  if (text) n.appendChild(document.createTextNode(text));
+  list.appendChild(n);
+}
+
+// 前に読んだデータをこの端末に残しておき、開いたらすぐ出す（そのあと新しいデータに入れ替える）
+function saveCache() { if (DATA) store.set('cache', JSON.stringify(DATA)); }
+
+let started = false;
+function start(data) {
+  DATA = data; B = data.base;
+  NAME = (data.people && data.people.names) || { me: '夫', wife: '妻' };
+  WORK = (data.people && data.people.work) || { me: '職場', wife: '職場' };
+  DATA.items.forEach((it) => { it.city = cityOf(it.addr); });
+  $('basis').textContent = NAME.wife + ' ' + B.wifeCommute + '分・' + NAME.me + ' ' + B.myCommute + '分・駅 徒歩' + B.stationWalk + '分・月 ' + yen(B.monthly);
+  $('optWife').textContent = NAME.wife + 'の通勤が短い順';
+  $('optMe').textContent = NAME.me + 'の通勤が短い順';
+  [...$('whoBtns').children].forEach((b) => { b.textContent = NAME[b.dataset.who]; });
+  $('sortLabel').textContent = $('sort').selectedOptions[0].textContent + ' ▾';
+  buildCities();
+  if (started) { render(); return; }
+  started = true;
+  const savedWho = store.get('who');
+  if (savedWho === 'me' || savedWho === 'wife') setWho(savedWho);
+  else { who = 'me'; render(); who = ''; $('whoBtn').textContent = '…'; $('whoSheet').classList.add('show'); }
+}
+
+function load() {
+  if (!API) { notice('共有された URL から開いてください', '最初の1回だけ、送られてきた URL（最後に #k=… が付いたもの）から開く必要があります。'); return; }
+  let cached = null;
+  try { cached = JSON.parse(store.get('cache') || 'null'); } catch (e) {}
+  if (cached && cached.items) start(cached); else notice('読み込み中…', '');
+  fetch(API + '?api=1')
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data || !data.items) throw new Error('データの形が正しくありません');
+      start(data); saveCache();
+    })
+    .catch((e) => { if (!cached) notice('読み込めませんでした', e.message + '。電波のよいところで、開き直してください。'); else toast('最新の情報を読み込めませんでした'); });
+}
+load();
+// アプリに戻ってきたとき（30分以上たっていれば）読み直す
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (hiddenAt && Date.now() - hiddenAt > 30 * 60 * 1000) load();
+});
+</script>
+</body>
+</html>
