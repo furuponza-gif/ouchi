@@ -8,7 +8,6 @@
 <meta name="theme-color" content="#1c1c1b" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="おうち探し">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
@@ -61,7 +60,7 @@
     position: sticky; top: 0; z-index: 10; background: var(--bar);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--line);
-    padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+    padding: 10px 16px; /* 時計の分の余白は付けない。ホーム画面から開くと iPhone が時計の下から表示するため（2026-11-16） */
   }
   .hrow { display: flex; align-items: center; gap: 8px; max-width: 640px; margin: 0 auto; }
   h1 { font-size: 18px; margin: 0; font-weight: 700; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
@@ -159,6 +158,9 @@
   .toast.show { opacity: 1; }
   .notice { text-align: center; color: var(--sub); padding: 48px 16px; font-size: 15px; }
   .notice b { display: block; color: var(--text); font-size: 17px; margin-bottom: 6px; }
+  .keybox { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; text-align: left; }
+  .keybox input { font-size: 16px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--text); width: 100%; }
+  .keybox button { min-height: 48px; border: 0; border-radius: 12px; background: var(--accent); color: var(--card); font-size: 16px; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -206,10 +208,8 @@
 // GAS の URL はコードに書かない。共有の URL の最後の「#k=…」で受け取り、この端末に覚える
 (function takeKey() {
   const m = location.hash.match(/[#&]k=([A-Za-z0-9_-]{20,})/);
-  if (m) {
-    try { localStorage.setItem('gasKey', m[1]); } catch (e) {}
-    history.replaceState(null, '', location.pathname + location.search);
-  }
+  // URL の #k=… は消さずに残す（ホーム画面に追加するとき、鍵ごと追加されるように）
+  if (m) { try { localStorage.setItem('gasKey', m[1]); } catch (e) {} }
 })();
 const KEY = (() => { try { return localStorage.getItem('gasKey') || ''; } catch (e) { return ''; } })();
 const API = KEY ? 'https://script.google.com/macros/s/' + KEY + '/exec' : '';
@@ -534,6 +534,23 @@ if (savedSort && $('sort').querySelector('option[value="' + savedSort + '"]')) {
 }
 setTheme(store.get('theme'));
 
+// 鍵がないとき（ホーム画面のアプリは Safari と保存場所が別なので、ここで貼ってもらう）
+function askKey() {
+  notice('最初の設定', '送られてきた URL（最後に #k=… が付いたもの）を、下に貼ってください。この画面に1回だけ必要です。');
+  const box = el('div', 'keybox');
+  const input = el('input');
+  input.type = 'url'; input.placeholder = 'https://…/ouchi/#k=…'; input.autocapitalize = 'off'; input.autocomplete = 'off';
+  const ok = el('button', null, '設定する');
+  ok.onclick = () => {
+    const m = input.value.match(/k=([A-Za-z0-9_-]{20,})/);
+    if (!m) { toast('URL の形が違います。最後に #k=… が付いた URL を貼ってください'); return; }
+    try { localStorage.setItem('gasKey', m[1]); } catch (e) {}
+    location.reload();
+  };
+  box.appendChild(input); box.appendChild(ok);
+  $('list').firstChild.appendChild(box);
+}
+
 function notice(title, text) {
   const list = $('list');
   list.textContent = '';
@@ -566,7 +583,7 @@ function start(data) {
 }
 
 function load() {
-  if (!API) { notice('共有された URL から開いてください', '最初の1回だけ、送られてきた URL（最後に #k=… が付いたもの）から開く必要があります。'); return; }
+  if (!API) { askKey(); return; }
   let cached = null;
   try { cached = JSON.parse(store.get('cache') || 'null'); } catch (e) {}
   if (cached && cached.items) start(cached); else notice('読み込み中…', '');

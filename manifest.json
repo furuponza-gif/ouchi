@@ -1,8 +1,6 @@
 {
   "name": "おうち探し",
   "short_name": "おうち探し",
-  "start_url": "./",
-  "scope": "./",
   "display": "standalone",
   "background_color": "#f5f5f2",
   "theme_color": "#f5f5f2",
