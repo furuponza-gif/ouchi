@@ -279,7 +279,7 @@ function buildCities() {
     box.appendChild(b);
   };
   add('', 'すべての地域');
-  if (kind === 'land') add('__g5', '第5学区（5市） ' + g5);
+  if (kind === 'land') add('__g5', '第5学区 ' + g5);
   Object.keys(n).sort((a, b) => n[b] - n[a] || a.localeCompare(b, 'ja'))
     .forEach((c) => add(c, c.replace(/^福岡市/, '') + ' ' + n[c]));
 }
@@ -323,7 +323,7 @@ function render() {
   $('nNew').textContent = unseen; $('nNew').hidden = !unseen;
   const c = DATA.counts;
   const label = { all: 'おすすめ', like: '気になる', new: 'まだ見てない', no: '見送り' }[tab];
-  $('count').textContent = (city === '__g5' ? '第5学区（5市）・' : city ? city + '・' : '') + label + ' ' + xs.length + '件'
+  $('count').textContent = (city === '__g5' ? '第5学区・' : city ? city + '・' : '') + label + ' ' + xs.length + '件'
     + '（ぜんぶで ' + c.measured + '件。点数を付ける前 ' + c.pending + '件' + (kind === 'land' ? '' : '・条件外 ' + c.excluded + '件') + '）';
   const list = $('list');
   list.textContent = '';
@@ -545,7 +545,7 @@ function cardLand(it) {
   const r = it.buildable === '✕' ? ['r3', '✕ 建てにくい'] : RANKS[it.rank || 'r3'];
   ph.appendChild(el('span', 'rank ' + r[0], r[1]));
   const flags = el('div', 'flags');
-  if (it.gakku5) flags.appendChild(el('span', 'flag g5', '第5学区'));
+  if (it.gakku5) flags.appendChild(el('span', 'flag g5', it.gakku5Sure === false ? '第5学区？' : '第5学区'));
   if (isNew(it)) flags.appendChild(el('span', 'flag new', '新着'));
   if (it.markMe === 'like' && it.markWife === 'like') flags.appendChild(el('span', 'flag both', '★ ふたりとも'));
   else if (markOf(it, other()) === 'like') flags.appendChild(el('span', 'flag', '★ ' + NAME[other()]));
@@ -598,7 +598,8 @@ function cardLand(it) {
   } else {
     det.appendChild(el('p', 'note', '建てられるか・建築条件は、まだ SUUMO の詳細ページで確かめていません'));
   }
-  if (it.gakku5) det.appendChild(el('p', 'note', '第5学区の札は、市まるごと福岡県立高校の第5学区に入る5市（太宰府・春日・大野城・那珂川・筑紫野）の土地に付けています。福岡市内の一部も第5学区ですが、札は付きません'));
+  if (it.gakku5) det.appendChild(el('p', 'note', '福岡県立高校の第5学区' + (it.gakku5Sure === false ? '（要確認）' : '') + '：' + (it.gakkuWhy || '')
+    + '。福岡市内は、福岡市の中学校区の区域（オープンデータ）と土地の位置から判定した目安です。境目の近くは「第5学区？」にしています'));
   if (it.dups) det.appendChild(el('p', 'note', 'ほかに ' + it.dups + '件、同じ土地の掲載があります（不動産会社が違う）'));
   if (it.check) det.appendChild(el('p', 'note', '要確認：' + it.check));
   det.appendChild(el('p', 'note', '交通：' + it.access));
