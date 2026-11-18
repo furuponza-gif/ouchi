@@ -73,6 +73,10 @@
   .sortwrap { position: relative; }
   .sortwrap select { position: absolute; inset: 0; opacity: 0; width: 100%; }
   .who { font-weight: 600; color: var(--home); background: var(--home-soft); border-color: transparent; }
+  .kinds { display: flex; background: var(--soft); border-radius: 10px; padding: 2px; margin: 10px auto 0; max-width: 640px; }
+  .kinds button { flex: 1; border: 0; background: transparent; border-radius: 8px; padding: 5px 0; font-size: 14px; color: var(--sub); min-height: 32px; }
+  .kinds button[aria-pressed="true"] { background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .flag.g5 { background: var(--good); }
   .chips { display: flex; gap: 6px; overflow-x: auto; margin: 10px auto 0; max-width: 640px; scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
   .chip { flex: none; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--sub); min-height: 32px; }
@@ -168,17 +172,10 @@
   <div class="hrow">
     <h1><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></span>おうち探し</h1>
     <span class="sortwrap"><span class="pill" id="sortLabel">おすすめ順 ▾</span>
-      <select id="sort" aria-label="並び替え">
-        <option value="score">おすすめ順</option>
-        <option value="new">新しく入った順</option>
-        <option value="monthly">安い順</option>
-        <option value="wife" id="optWife">通勤が短い順</option>
-        <option value="me" id="optMe">通勤が短い順</option>
-        <option value="age">築年数が新しい順</option>
-        <option value="area">広い順</option>
-      </select></span>
+      <select id="sort" aria-label="並び替え"></select></span>
     <button class="pill who" id="whoBtn" aria-label="見ている人・画面の色"></button>
   </div>
+  <div class="kinds" id="kinds"><button data-k="rent">賃貸</button><button data-k="land">土地</button></div>
   <div class="chips" id="cities"></div>
 </header>
 <main>
@@ -218,6 +215,24 @@ const PAGE = 20;
 let NAME = { me: '', wife: '' };
 const RECENT_DAYS = 2; // 取り込んでからこの日数までは「新着」
 let tab = 'all', sort = 'score', city = '', shown = PAGE, who = '';
+let kind = (() => { try { return localStorage.getItem('kind') === 'land' ? 'land' : 'rent'; } catch (e) { return 'rent'; } })();
+const sk = (k) => kind === 'land' ? k + '_land' : k; // 種類ごとに覚える（賃貸は前からの名前のまま）
+const SORTS = {
+  rent: [['score', 'おすすめ順'], ['new', '新しく入った順'], ['monthly', '安い順'], ['wife', ''], ['me', ''], ['age', '築年数が新しい順'], ['area', '広い順']],
+  land: [['score', 'おすすめ順'], ['new', '新しく入った順'], ['g5', '第5学区を先に'], ['price', '安い順'], ['tsubo', '広い順'], ['unit', '坪単価が安い順'], ['wife', ''], ['me', '']],
+};
+function buildSort() {
+  const sel = $('sort');
+  sel.textContent = '';
+  SORTS[kind].forEach(([v, label]) => {
+    const o = el('option', null, v === 'wife' ? NAME.wife + 'の通勤が短い順' : v === 'me' ? NAME.me + 'の通勤が短い順' : label);
+    o.value = v; sel.appendChild(o);
+  });
+  const saved = store.get(sk('sort'));
+  sort = SORTS[kind].some(([v]) => v === saved) ? saved : 'score';
+  sel.value = sort;
+  $('sortLabel').textContent = sel.selectedOptions[0].textContent + ' ▾';
+}
 
 const $ = (id) => document.getElementById(id);
 function el(tag, cls, text) {
@@ -252,24 +267,29 @@ function cityOf(addr) {
 function buildCities() {
   const n = {};
   DATA.items.forEach((it) => { n[it.city] = (n[it.city] || 0) + 1; });
-  const saved = store.get('city');
-  if (saved && n[saved]) city = saved;
+  const g5 = kind === 'land' ? DATA.items.filter((it) => it.gakku5).length : 0;
+  const saved = store.get(sk('city'));
+  city = (saved && (n[saved] || (saved === '__g5' && g5))) ? saved : '';
   const box = $('cities');
   box.textContent = '';
   const add = (v, label) => {
     const b = el('button', 'chip', label);
     b.setAttribute('aria-pressed', v === city);
-    b.onclick = () => { city = v; shown = PAGE; store.set('city', v); buildCities(); render(); };
+    b.onclick = () => { city = v; shown = PAGE; store.set(sk('city'), v); buildCities(); render(); };
     box.appendChild(b);
   };
   add('', 'すべての地域');
+  if (kind === 'land') add('__g5', '第5学区だけ ' + g5);
   Object.keys(n).sort((a, b) => n[b] - n[a] || a.localeCompare(b, 'ja'))
     .forEach((c) => add(c, c.replace(/^福岡市/, '') + ' ' + n[c]));
 }
 
+const unitOf = (it) => (Number(it.price) > 0 && Number(it.tsubo) > 0) ? Number(it.price) / Number(it.tsubo) : 1e9; // 坪単価（万円）
+
 function visible() {
   const xs = DATA.items.filter((it) => {
-    if (city && it.city !== city) return false;
+    if (city === '__g5') { if (!it.gakku5) return false; }
+    else if (city && it.city !== city) return false;
     const mine = markOf(it, who);
     if (tab === 'all') return mine !== 'no';
     if (tab === 'like') return it.markMe === 'like' || it.markWife === 'like';
@@ -286,7 +306,11 @@ function visible() {
     me: (a, b) => num(a.me, 999) - num(b.me, 999),
     age: (a, b) => num(a.age, 99) - num(b.age, 99),
     area: (a, b) => num(b.area, 0) - num(a.area, 0),
-  }[sort];
+    price: (a, b) => num(a.price, 1e9) - num(b.price, 1e9),
+    tsubo: (a, b) => num(b.tsubo, 0) - num(a.tsubo, 0),
+    unit: (a, b) => unitOf(a) - unitOf(b),
+    g5: (a, b) => (b.gakku5 ? 1 : 0) - (a.gakku5 ? 1 : 0) || String(b.added).localeCompare(String(a.added)) || num(b.score, -99) - num(a.score, -99),
+  }[sort] || ((a, b) => num(b.score, -99) - num(a.score, -99));
   // 「気になる」では、ふたりとも★ を先に
   return xs.sort(tab === 'like' ? (a, b) => both(b) - both(a) || by(a, b) : by);
 }
@@ -299,8 +323,8 @@ function render() {
   $('nNew').textContent = unseen; $('nNew').hidden = !unseen;
   const c = DATA.counts;
   const label = { all: 'おすすめ', like: '気になる', new: 'まだ見てない', no: '見送り' }[tab];
-  $('count').textContent = (city ? city + '・' : '') + label + ' ' + xs.length + '件'
-    + '（ぜんぶで ' + c.measured + '件。点数を付ける前 ' + c.pending + '件・条件外 ' + c.excluded + '件）';
+  $('count').textContent = (city === '__g5' ? '第5学区・' : city ? city + '・' : '') + label + ' ' + xs.length + '件'
+    + '（ぜんぶで ' + c.measured + '件。点数を付ける前 ' + c.pending + '件' + (kind === 'land' ? '' : '・条件外 ' + c.excluded + '件') + '）';
   const list = $('list');
   list.textContent = '';
   if (!xs.length) {
@@ -308,7 +332,7 @@ function render() {
       tab === 'like' ? 'まだ ★ を付けた物件はありません' : tab === 'new' ? 'ぜんぶ見ました' : tab === 'no' ? '見送った物件はありません' : '該当する物件はありません'));
     return;
   }
-  xs.slice(0, shown).forEach((it) => list.appendChild(card(it)));
+  xs.slice(0, shown).forEach((it) => list.appendChild(kind === 'land' ? cardLand(it) : card(it)));
   if (xs.length > shown) {
     const more = el('button', 'more', 'もっと見る（あと ' + (xs.length - shown) + '件）');
     more.onclick = () => { shown += PAGE; render(); };
@@ -460,6 +484,114 @@ function card(it) {
   return c;
 }
 
+// ===== 土地のカード（2026-11-18）=====
+function landPoints(it) {
+  const g = [], w = [];
+  const cmp = (label, v, base) => {
+    if (blank(v)) return;
+    const d = Number(v) - base;
+    if (d <= -3) g.push(label + ' ' + (-d) + '分短い');
+    else if (d >= 3) w.push(label + ' ' + d + '分長い');
+  };
+  cmp(NAME.wife + 'の通勤', it.wife, B.wifeCommute);
+  cmp(NAME.me + 'の通勤', it.me, B.myCommute);
+  if (!blank(it.stWalk)) {
+    if (Number(it.stWalk) <= 10) g.push((it.station ? String(it.station).replace(/駅$/, '') + '駅' : '駅') + ' 徒歩' + it.stWalk + '分');
+    else if (Number(it.stWalk) >= 20) w.push('駅 徒歩' + it.stWalk + '分');
+  }
+  if (blank(it.superWalk)) w.push('近くにスーパーなし');
+  else if (Number(it.superWalk) <= 7) g.push('スーパー 徒歩' + it.superWalk + '分');
+  else if (Number(it.superWalk) > 12) w.push('スーパー 徒歩' + it.superWalk + '分');
+  if (!blank(it.tsubo) && Number(it.tsubo) >= 50) g.push('広い（' + Math.round(it.tsubo) + '坪）');
+  if (!blank(it.price) && Number(it.price) <= 1500) g.push('予算より ' + (2000 - Number(it.price)) + '万円安い');
+  if ((!blank(it.kenpei) && Number(it.kenpei) <= 40) || (!blank(it.youseki) && Number(it.youseki) <= 60)) w.push('建ぺい率・容積率が低め');
+  if (it.joken) w.push('建築条件付き');
+  return { g, w };
+}
+
+function cardLand(it) {
+  const mine = markOf(it, who);
+  const c = el('article', 'card' + (mine === 'no' ? ' no' : ''));
+  const ph = el('div', 'photo');
+  ph.appendChild(svg(PH));
+  if (it.photo && /^https:\/\/img\d*\.suumo\.com\//.test(it.photo)) {
+    const img = el('img');
+    img.loading = 'lazy'; img.alt = ''; img.referrerPolicy = 'no-referrer';
+    img.onerror = () => img.remove();
+    img.src = it.photo;
+    ph.appendChild(img);
+  }
+  const sc = Number(it.score);
+  const r = sc >= 6 ? ['r1', '◎ おすすめ'] : sc >= 2 ? ['r2', '○ まあまあ'] : ['r3', '△ いまいち'];
+  ph.appendChild(el('span', 'rank ' + r[0], r[1]));
+  const flags = el('div', 'flags');
+  if (it.gakku5) flags.appendChild(el('span', 'flag g5', '第5学区'));
+  if (isNew(it)) flags.appendChild(el('span', 'flag new', '新着'));
+  if (it.markMe === 'like' && it.markWife === 'like') flags.appendChild(el('span', 'flag both', '★ ふたりとも'));
+  else if (markOf(it, other()) === 'like') flags.appendChild(el('span', 'flag', '★ ' + NAME[other()]));
+  ph.appendChild(flags);
+  c.appendChild(ph);
+
+  const body = el('div', 'body');
+  const price = el('div', 'price', Number(it.price).toLocaleString('ja-JP') + '万円');
+  price.appendChild(el('small', null, /～|〜/.test(it.priceText) ? '〜（区画によって違う）' : '（土地だけ）'));
+  body.appendChild(price);
+  body.appendChild(el('div', 'name', it.name || (String(it.addr).replace(/^福岡県/, '').replace(/[0-9０-９].*$/, '') + 'の土地')));
+  const unit = unitOf(it) < 1e9 ? '坪単価 ' + (Math.round(unitOf(it) * 10) / 10) + '万円' : '';
+  const facts = [Math.round(Number(it.tsubo) * 10) / 10 + '坪' + (blank(it.m2) ? '' : '（' + Math.round(it.m2) + '㎡）'), unit,
+    blank(it.kenpei) ? '' : '建ぺい率' + it.kenpei + '%・容積率' + it.youseki + '%'].filter((x) => x).join('・');
+  body.appendChild(el('div', 'facts', facts + '｜' + String(it.addr).replace(/^福岡県/, '')));
+
+  const p = landPoints(it);
+  const pts = el('div', 'pts');
+  p.g.forEach((x) => pts.appendChild(el('span', 'pt g', '👍 ' + x)));
+  p.w.forEach((x) => pts.appendChild(el('span', 'pt w', x)));
+  body.appendChild(pts);
+
+  const det = el('details');
+  det.appendChild(el('summary', null, 'くわしく見る（通勤・お店・区画・点数の内訳）'));
+  const rows = el('div', 'rows');
+  const row = (k, v, d) => {
+    rows.appendChild(el('div', 'k', k));
+    rows.appendChild(el('div', 'v', v));
+    rows.appendChild(el('div', 'd ' + (d ? d.cls : ''), d ? d.text : ''));
+  };
+  row(NAME.wife + 'の通勤', blank(it.wife) ? '—' : WORK.wife + 'まで ' + it.wife + '分', diffMin(it.wife, B.wifeCommute));
+  row(NAME.me + 'の通勤', blank(it.me) ? '—' : WORK.me + 'まで ' + it.me + '分', diffMin(it.me, B.myCommute));
+  row('駅', it.station ? it.station + ' 徒歩' + it.stWalk + '分' : '—', diffMin(it.stWalk, B.stationWalk));
+  row('スーパー', blank(it.superWalk) ? 'なし' : '徒歩' + it.superWalk + '分（' + it.superName + '）', walkCell(it.superWalk));
+  row('コンビニ', blank(it.convWalk) ? 'なし' : '徒歩' + it.convWalk + '分' + (it.convName ? '（' + it.convName + '）' : ''), walkCell(it.convWalk));
+  if (it.mall) row('モール', blank(it.mallMin) ? it.mall + '（測れず）' : '車' + it.mallMin + '分・' + it.mallKm + 'km（' + it.mall + '）', null);
+  det.appendChild(rows);
+  if (it.parts) {
+    const ps = el('div', 'parts');
+    String(it.parts).split(' ').filter((x) => x).forEach((x) => ps.appendChild(el('span', 'part ' + (x.indexOf('+') >= 0 ? 'good' : 'bad'), x)));
+    det.appendChild(ps);
+  }
+  det.appendChild(el('p', 'note', '点数 ' + (sc > 0 ? '+' : '') + sc + '点。価格：' + it.priceText + '／面積：' + it.areaText));
+  if (it.check) det.appendChild(el('p', 'note', '要確認：' + it.check));
+  det.appendChild(el('p', 'note', '交通：' + it.access));
+  body.appendChild(det);
+
+  const acts = el('div', 'acts');
+  const like = el('button', 'like', '★ 気になる');
+  like.setAttribute('aria-pressed', mine === 'like');
+  like.onclick = () => mark(it, mine === 'like' ? '' : 'like');
+  const nope = el('button', 'nope', '見送る');
+  nope.setAttribute('aria-pressed', mine === 'no');
+  nope.onclick = () => mark(it, mine === 'no' ? '' : 'no');
+  const suumo = el('a', 'sm', 'SUUMO');
+  suumo.href = /^https:\/\/suumo\.jp\//.test(it.url) ? it.url : 'https://suumo.jp/tochi/fukuoka/';
+  suumo.target = '_blank'; suumo.rel = 'noopener';
+  const map = el('a', 'sm', '地図');
+  map.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(it.addr);
+  map.target = '_blank'; map.rel = 'noopener';
+  [like, nope, suumo, map].forEach((x) => acts.appendChild(x));
+  body.appendChild(acts);
+  c.appendChild(body);
+  return c;
+}
+
 function mark(it, v) {
   const k = who === 'wife' ? 'markWife' : 'markMe';
   const prev = it[k];
@@ -523,15 +655,11 @@ $('tabs').addEventListener('click', (e) => {
   render();
 });
 $('sort').addEventListener('change', (e) => {
-  sort = e.target.value; shown = PAGE; store.set('sort', sort);
+  sort = e.target.value; shown = PAGE; store.set(sk('sort'), sort);
   $('sortLabel').textContent = e.target.selectedOptions[0].textContent + ' ▾';
   render();
 });
 
-const savedSort = store.get('sort');
-if (savedSort && $('sort').querySelector('option[value="' + savedSort + '"]')) {
-  sort = savedSort; $('sort').value = sort;
-}
 setTheme(store.get('theme'));
 
 // 鍵がないとき（ホーム画面のアプリは Safari と保存場所が別なので、ここで貼ってもらう）
@@ -561,19 +689,19 @@ function notice(title, text) {
 }
 
 // 前に読んだデータをこの端末に残しておき、開いたらすぐ出す（そのあと新しいデータに入れ替える）
-function saveCache() { if (DATA) store.set('cache', JSON.stringify(DATA)); }
+function saveCache() { if (DATA) store.set(sk('cache'), JSON.stringify(DATA)); }
 
 let started = false;
 function start(data) {
   DATA = data; B = data.base;
   NAME = (data.people && data.people.names) || { me: '夫', wife: '妻' };
   WORK = (data.people && data.people.work) || { me: '職場', wife: '職場' };
-  DATA.items.forEach((it) => { it.city = cityOf(it.addr); });
-  $('basis').textContent = NAME.wife + ' ' + B.wifeCommute + '分・' + NAME.me + ' ' + B.myCommute + '分・駅 徒歩' + B.stationWalk + '分・月 ' + yen(B.monthly);
-  $('optWife').textContent = NAME.wife + 'の通勤が短い順';
-  $('optMe').textContent = NAME.me + 'の通勤が短い順';
+  DATA.items.forEach((it) => { if (!it.city) it.city = cityOf(it.addr); });
+  $('basis').textContent = NAME.wife + ' ' + B.wifeCommute + '分・' + NAME.me + ' ' + B.myCommute + '分・駅 徒歩' + B.stationWalk + '分'
+    + (kind === 'land' ? '（土地は ' + Number(data.landBudget).toLocaleString('ja-JP') + '万円まで・' + data.landTsubo + '坪以上）' : '・月 ' + yen(B.monthly));
   [...$('whoBtns').children].forEach((b) => { b.textContent = NAME[b.dataset.who]; });
-  $('sortLabel').textContent = $('sort').selectedOptions[0].textContent + ' ▾';
+  [...$('kinds').children].forEach((b) => b.setAttribute('aria-pressed', b.dataset.k === kind));
+  buildSort();
   buildCities();
   if (started) { render(); return; }
   started = true;
@@ -585,16 +713,26 @@ function start(data) {
 function load() {
   if (!API) { askKey(); return; }
   let cached = null;
-  try { cached = JSON.parse(store.get('cache') || 'null'); } catch (e) {}
-  if (cached && cached.items) start(cached); else notice('読み込み中…', '');
-  fetch(API + '?api=1')
+  const want = kind;
+  try { cached = JSON.parse(store.get(sk('cache')) || 'null'); } catch (e) {}
+  if (cached && cached.items) start(cached); else { DATA = null; notice('読み込み中…', ''); }
+  fetch(API + '?api=1' + (kind === 'land' ? '&kind=land' : ''))
     .then((r) => r.json())
     .then((data) => {
       if (!data || !data.items) throw new Error('データの形が正しくありません');
+      if (want !== kind) return; // 読んでいる間に切り替えられた
       start(data); saveCache();
     })
     .catch((e) => { if (!cached) notice('読み込めませんでした', e.message + '。電波のよいところで、開き直してください。'); else toast('最新の情報を読み込めませんでした'); });
 }
+$('kinds').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b || b.dataset.k === kind) return;
+  kind = b.dataset.k; store.set('kind', kind);
+  [...$('kinds').children].forEach((x) => x.setAttribute('aria-pressed', x === b));
+  shown = PAGE; window.scrollTo(0, 0);
+  load();
+});
+[...$('kinds').children].forEach((b) => b.setAttribute('aria-pressed', b.dataset.k === kind));
 load();
 // アプリに戻ってきたとき（30分以上たっていれば）読み直す
 let hiddenAt = 0;
