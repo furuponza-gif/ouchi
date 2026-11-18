@@ -524,6 +524,7 @@ function landPoints(it) {
   if ((!blank(it.kenpei) && Number(it.kenpei) <= 40) || (!blank(it.youseki) && Number(it.youseki) <= 60)) w.push('建ぺい率・容積率が低め');
   if (it.buildable === '○') g.push('建てられる見込み');
   else if (it.buildable === '△') String(it.buildReason).split('、').filter((x) => x).forEach((x) => w.push(x));
+  String(it.landNotes || '').split('、').filter((x) => x).forEach((x) => w.push(x));
   if (it.joken) w.push('建築条件あり');
   else if (it.detailDone) g.push('建築条件なし');
   return { g, w };
