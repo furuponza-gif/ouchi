@@ -279,7 +279,7 @@ function buildCities() {
     box.appendChild(b);
   };
   add('', 'すべての地域');
-  if (kind === 'land') add('__g5', '第5学区だけ ' + g5);
+  if (kind === 'land') add('__g5', '第5学区（5市） ' + g5);
   Object.keys(n).sort((a, b) => n[b] - n[a] || a.localeCompare(b, 'ja'))
     .forEach((c) => add(c, c.replace(/^福岡市/, '') + ' ' + n[c]));
 }
@@ -323,7 +323,7 @@ function render() {
   $('nNew').textContent = unseen; $('nNew').hidden = !unseen;
   const c = DATA.counts;
   const label = { all: 'おすすめ', like: '気になる', new: 'まだ見てない', no: '見送り' }[tab];
-  $('count').textContent = (city === '__g5' ? '第5学区・' : city ? city + '・' : '') + label + ' ' + xs.length + '件'
+  $('count').textContent = (city === '__g5' ? '第5学区（5市）・' : city ? city + '・' : '') + label + ' ' + xs.length + '件'
     + '（ぜんぶで ' + c.measured + '件。点数を付ける前 ' + c.pending + '件' + (kind === 'land' ? '' : '・条件外 ' + c.excluded + '件') + '）';
   const list = $('list');
   list.textContent = '';
@@ -363,11 +363,9 @@ function points(it) {
     if (Number(it.area) >= 60) g.push('広い（' + it.area + '㎡）');
     else if (Number(it.area) < 45) w.push('少しせまい（' + it.area + '㎡）');
   }
-  if (!blank(it.monthly)) {
-    const d = B.monthly - Number(it.monthly);
-    if (d >= 3000) g.push('今より月 ' + yen(d) + ' 安い');
-    else if (d <= -10000) w.push('今より月 ' + yen(-d) + ' 高い');
-  }
+  // お金：今の家より高い物件がほとんどなので、候補の中で比べる（2026-11-18）
+  if (!blank(it.rentFee) && Number(it.rentFee) >= 95000) w.push('予算ぎりぎり');
+  else if (!blank(it.monthly) && DATA.medianMonthly && Number(it.monthly) <= DATA.medianMonthly - 5000) g.push('候補の中では安め');
   if (it.age === 0 || (!blank(it.age) && Number(it.age) <= 5)) g.push(it.age === 0 ? '新築' : '築浅（築' + it.age + '年）');
   return { g, w };
 }
@@ -399,7 +397,7 @@ function card(it) {
     ph.appendChild(img);
   }
   const sc = Number(it.score);
-  const r = sc >= 3 ? ['r1', '◎ おすすめ'] : sc >= 0 ? ['r2', '○ まあまあ'] : ['r3', '△ いまいち'];
+  const r = RANKS[it.rank || 'r3'];
   ph.appendChild(el('span', 'rank ' + r[0], r[1]));
   const flags = el('div', 'flags');
   if (isNew(it)) flags.appendChild(el('span', 'flag new', '新着'));
@@ -485,6 +483,25 @@ function card(it) {
 }
 
 // ===== 土地のカード（2026-11-18）=====
+const RANKS = { r1: ['r1', '◎ おすすめ'], r2: ['r2', '○ まあまあ'], r3: ['r3', '△ いまいち'] };
+// ランクは点数の高さではなく、候補の中での順位で決める（上位20%＝◎、次の40%＝○）。2026-11-18
+function setRanks(items) {
+  const xs = items.slice().sort((a, b) => Number(b.score) - Number(a.score));
+  xs.forEach((it, i) => { const q = i / Math.max(1, xs.length); it.rank = q < 0.2 ? 'r1' : q < 0.6 ? 'r2' : 'r3'; });
+}
+// 同じ土地（住所・価格・坪数が同じ）を1枚にまとめる。★が付いている方、点数が高い方を残す（2026-11-18）
+function mergeSameLand(items) {
+  const groups = {};
+  items.forEach((it) => { const k = [it.addr, it.price, it.tsubo].join('|'); (groups[k] = groups[k] || []).push(it); });
+  const out = [];
+  Object.keys(groups).forEach((k) => {
+    const g = groups[k].sort((a, b) => ((b.markMe || b.markWife) ? 1 : 0) - ((a.markMe || a.markWife) ? 1 : 0) || Number(b.score) - Number(a.score));
+    g[0].dups = g.length - 1;
+    out.push(g[0]);
+  });
+  return out;
+}
+
 function landPoints(it) {
   const g = [], w = [];
   const cmp = (label, v, base) => {
@@ -505,7 +522,10 @@ function landPoints(it) {
   if (!blank(it.tsubo) && Number(it.tsubo) >= 50) g.push('広い（' + Math.round(it.tsubo) + '坪）');
   if (!blank(it.price) && Number(it.price) <= 1500) g.push('予算より ' + (2000 - Number(it.price)) + '万円安い');
   if ((!blank(it.kenpei) && Number(it.kenpei) <= 40) || (!blank(it.youseki) && Number(it.youseki) <= 60)) w.push('建ぺい率・容積率が低め');
-  if (it.joken) w.push('建築条件付き');
+  if (it.buildable === '○') g.push('建てられる見込み');
+  else if (it.buildable === '△') String(it.buildReason).split('、').filter((x) => x).forEach((x) => w.push(x));
+  if (it.joken) w.push('建築条件あり');
+  else if (it.detailDone) g.push('建築条件なし');
   return { g, w };
 }
 
@@ -522,7 +542,7 @@ function cardLand(it) {
     ph.appendChild(img);
   }
   const sc = Number(it.score);
-  const r = sc >= 6 ? ['r1', '◎ おすすめ'] : sc >= 2 ? ['r2', '○ まあまあ'] : ['r3', '△ いまいち'];
+  const r = it.buildable === '✕' ? ['r3', '✕ 建てにくい'] : RANKS[it.rank || 'r3'];
   ph.appendChild(el('span', 'rank ' + r[0], r[1]));
   const flags = el('div', 'flags');
   if (it.gakku5) flags.appendChild(el('span', 'flag g5', '第5学区'));
@@ -569,6 +589,17 @@ function cardLand(it) {
     det.appendChild(ps);
   }
   det.appendChild(el('p', 'note', '点数 ' + (sc > 0 ? '+' : '') + sc + '点。価格：' + it.priceText + '／面積：' + it.areaText));
+  if (it.detailDone) {
+    det.appendChild(el('p', 'note', '建てられるか（目安）：' + ({ '○': '見込みあり', '△': '要確認', '✕': '建てにくい' }[it.buildable] || '—')
+      + (it.buildReason ? '（' + it.buildReason + '）' : '') + '。最後は不動産会社・役所で確かめてください'));
+    det.appendChild(el('p', 'note', ['用途地域：' + (it.youto || '—'), '地目：' + (it.chimoku || '—'), '権利：' + (it.rights || '—'),
+      '土地の状況：' + (it.landState || '—'), '道路：' + (it.road || '—'), '建築条件：' + (it.joken ? 'あり' : 'なし')]
+      .concat(it.restrict ? ['制限：' + it.restrict] : []).join('／')));
+  } else {
+    det.appendChild(el('p', 'note', '建てられるか・建築条件は、まだ SUUMO の詳細ページで確かめていません'));
+  }
+  if (it.gakku5) det.appendChild(el('p', 'note', '第5学区の札は、市まるごと福岡県立高校の第5学区に入る5市（太宰府・春日・大野城・那珂川・筑紫野）の土地に付けています。福岡市内の一部も第5学区ですが、札は付きません'));
+  if (it.dups) det.appendChild(el('p', 'note', 'ほかに ' + it.dups + '件、同じ土地の掲載があります（不動産会社が違う）'));
   if (it.check) det.appendChild(el('p', 'note', '要確認：' + it.check));
   det.appendChild(el('p', 'note', '交通：' + it.access));
   body.appendChild(det);
@@ -696,7 +727,11 @@ function start(data) {
   DATA = data; B = data.base;
   NAME = (data.people && data.people.names) || { me: '夫', wife: '妻' };
   WORK = (data.people && data.people.work) || { me: '職場', wife: '職場' };
+  if (kind === 'land') DATA.items = mergeSameLand(DATA.items);
   DATA.items.forEach((it) => { if (!it.city) it.city = cityOf(it.addr); });
+  setRanks(DATA.items);
+  const months = DATA.items.map((it) => Number(it.monthly)).filter((x) => x > 0).sort((a, b) => a - b);
+  DATA.medianMonthly = months.length ? months[Math.floor(months.length / 2)] : 0;
   $('basis').textContent = NAME.wife + ' ' + B.wifeCommute + '分・' + NAME.me + ' ' + B.myCommute + '分・駅 徒歩' + B.stationWalk + '分'
     + (kind === 'land' ? '（土地は ' + Number(data.landBudget).toLocaleString('ja-JP') + '万円まで・' + data.landTsubo + '坪以上）' : '・月 ' + yen(B.monthly));
   [...$('whoBtns').children].forEach((b) => { b.textContent = NAME[b.dataset.who]; });
