@@ -64,6 +64,8 @@
   }
   .hrow { display: flex; align-items: center; gap: 8px; max-width: 640px; margin: 0 auto; }
   h1 { font-size: 18px; margin: 0; font-weight: 700; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  h1 { white-space: nowrap; }
+  .updated { font-size: 11px; font-weight: 400; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin-left: 2px; }
   .logo { width: 28px; height: 28px; border-radius: 8px; background: var(--home-soft); color: var(--home); display: grid; place-items: center; flex: none; }
   .logo svg { width: 17px; height: 17px; }
   .pill {
@@ -73,7 +75,8 @@
   .sortwrap { position: relative; }
   .sortwrap select { position: absolute; inset: 0; opacity: 0; width: 100%; }
   .who { font-weight: 600; color: var(--home); background: var(--home-soft); border-color: transparent; }
-  .kinds { display: flex; background: var(--soft); border-radius: 10px; padding: 2px; margin: 10px auto 0; max-width: 640px; }
+  .row2 { display: flex; gap: 8px; align-items: center; margin: 10px auto 0; max-width: 640px; }
+  .kinds { display: flex; flex: 1; background: var(--soft); border-radius: 10px; padding: 2px; }
   .kinds button { flex: 1; border: 0; background: transparent; border-radius: 8px; padding: 5px 0; font-size: 14px; color: var(--sub); min-height: 32px; }
   .kinds button[aria-pressed="true"] { background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
   .flag.g5 { background: var(--good); }
@@ -170,12 +173,14 @@
 <body>
 <header>
   <div class="hrow">
-    <h1><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></span>おうち探し</h1>
-    <span class="sortwrap"><span class="pill" id="sortLabel">おすすめ順 ▾</span>
-      <select id="sort" aria-label="並び替え"></select></span>
+    <h1><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></span>おうち探し<span class="updated" id="updated"></span></h1>
     <button class="pill who" id="whoBtn" aria-label="見ている人・画面の色"></button>
   </div>
-  <div class="kinds" id="kinds"><button data-k="rent">賃貸</button><button data-k="land">土地</button></div>
+  <div class="row2">
+    <div class="kinds" id="kinds"><button data-k="rent">賃貸</button><button data-k="land">土地</button></div>
+    <span class="sortwrap"><span class="pill" id="sortLabel">おすすめ順 ▾</span>
+      <select id="sort" aria-label="並び替え"></select></span>
+  </div>
   <div class="chips" id="cities"></div>
 </header>
 <main>
@@ -722,6 +727,17 @@ function notice(title, text) {
 }
 
 // 前に読んだデータをこの端末に残しておき、開いたらすぐ出す（そのあと新しいデータに入れ替える）
+// 「今日 9:32 更新」「昨日 0:13 更新」「11/18 更新」（日本時間の日付で比べる）
+function updatedText(v) {
+  const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
+  if (!m) return '';
+  const day = (d) => new Date(d.getTime() + 9 * 3600000).toISOString().slice(0, 10);
+  const now = new Date(), ymd = m[1] + '-' + m[2] + '-' + m[3], t = Number(m[4]) + ':' + m[5];
+  if (ymd === day(now)) return '今日 ' + t + ' 更新';
+  if (ymd === day(new Date(now.getTime() - 86400000))) return '昨日 ' + t + ' 更新';
+  return Number(m[2]) + '/' + Number(m[3]) + ' 更新';
+}
+
 function saveCache() { if (DATA) store.set(sk('cache'), JSON.stringify(DATA)); }
 
 let started = false;
@@ -737,6 +753,8 @@ function start(data) {
   $('basis').textContent = NAME.wife + ' ' + B.wifeCommute + '分・' + NAME.me + ' ' + B.myCommute + '分・駅 徒歩' + B.stationWalk + '分'
     + (kind === 'land' ? '（土地は ' + Number(data.landBudget).toLocaleString('ja-JP') + '万円まで・' + data.landTsubo + '坪以上）' : '・月 ' + yen(B.monthly));
   [...$('whoBtns').children].forEach((b) => { b.textContent = NAME[b.dataset.who]; });
+  // 最後に SUUMO から取り込んだ日時（例：11/20 12:14 更新）
+  $('updated').textContent = updatedText(data.updatedAt);
   [...$('kinds').children].forEach((b) => b.setAttribute('aria-pressed', b.dataset.k === kind));
   buildSort();
   buildCities();
