@@ -754,7 +754,9 @@ function start(data) {
     + (kind === 'land' ? '（土地は ' + Number(data.landBudget).toLocaleString('ja-JP') + '万円まで・' + data.landTsubo + '坪以上）' : '・月 ' + yen(B.monthly));
   [...$('whoBtns').children].forEach((b) => { b.textContent = NAME[b.dataset.who]; });
   // 最後に SUUMO から取り込んだ日時（例：11/20 12:14 更新）
-  $('updated').textContent = updatedText(data.updatedAt);
+  // 点数を付ける前の物件があれば添える（画面には点数の付いた物件だけが出るため。2026-11-20）
+  const waiting = data.counts && Number(data.counts.pending) > 0 ? '（点数待ち ' + data.counts.pending + '件）' : '';
+  $('updated').textContent = updatedText(data.updatedAt) + waiting;
   [...$('kinds').children].forEach((b) => b.setAttribute('aria-pressed', b.dataset.k === kind));
   buildSort();
   buildCities();
