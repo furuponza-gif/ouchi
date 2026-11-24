@@ -406,6 +406,7 @@ function card(it) {
   const r = RANKS[it.rank || 'r3'];
   ph.appendChild(el('span', 'rank ' + r[0], r[1]));
   const flags = el('div', 'flags');
+  if (it.source === 'ふれんず') flags.appendChild(el('span', 'flag g5', 'ふれんず'));
   if (isNew(it)) flags.appendChild(el('span', 'flag new', '新着'));
   if (it.markMe === 'like' && it.markWife === 'like') flags.appendChild(el('span', 'flag both', '★ ふたりとも'));
   else if (markOf(it, other()) === 'like') flags.appendChild(el('span', 'flag', '★ ' + NAME[other()]));
@@ -473,10 +474,13 @@ function card(it) {
   const nope = el('button', 'nope', '見送る');
   nope.setAttribute('aria-pressed', mine === 'no');
   nope.onclick = () => mark(it, mine === 'no' ? '' : 'no');
-  const suumo = el('a', 'sm', 'SUUMO');
+  const fromFreins = it.source === 'ふれんず';
+  const suumo = el('a', 'sm', fromFreins ? 'ふれんず' : 'SUUMO');
   // 物件ページが分かっていればそこへ。分からない（手で貼って取り込んだ）物件は、SUUMO の中を建物名で探して
   // いちばん上に出たページへ直接飛ぶ（DuckDuckGo の「\」検索。建物のページになることが多い）
-  suumo.href = /^https:\/\/suumo\.jp\//.test(it.url) ? it.url
+  // ふれんずから貼った部屋は、ふれんずの中を建物名（部屋番号を除く）で探すページへ（2026-11-24）
+  suumo.href = fromFreins ? 'https://www.f-takken.com/freins/rent/houses/keyword/items?keyword=' + encodeURIComponent(String(it.name).replace(/\s+[A-Za-z]?\d+[A-Za-z]?$/, ''))
+    : /^https:\/\/suumo\.jp\//.test(it.url) ? it.url
     : 'https://duckduckgo.com/?q=' + encodeURIComponent('\\ site:suumo.jp/chintai ' + it.name + ' ' + String(it.addr).replace(/^福岡県/, ''));
   suumo.target = '_blank'; suumo.rel = 'noopener';
   const map = el('a', 'sm', '地図');
